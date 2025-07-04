@@ -1,0 +1,212 @@
+import { useState } from "react";
+import axios from 'axios';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { serverEndpoint } from "../config/config";
+import { useDispatch } from "react-redux";
+import { SET_USER } from "../redux/user/actions";
+
+function Register({ updateUserDetails }) {
+    const dispatch = useDispatch();
+    const [formData, setFormData] = useState({
+        name: "",
+        username: "",
+        password: ""
+    });
+
+    const [errors, setErrors] = useState({});
+    const [message, setMessage] = useState(null);
+
+    const handleChange = (event) => {
+        const { name, value } = event.target;
+        setFormData({
+            ...formData,
+            [name]: value
+        });
+    };
+
+    const validate = () => {
+        let newErrors = {};
+        let isValid = true;
+
+        if (formData.name.trim() === '') {
+            newErrors.name = "Name is mandatory";
+            isValid = false;
+        }
+
+        if (formData.username.trim() === '') {
+            newErrors.username = "Email is mandatory";
+            isValid = false;
+        }
+
+        if (formData.password.trim() === '') {
+            newErrors.password = "Password is mandatory";
+            isValid = false;
+        }
+
+        setErrors(newErrors);
+        return isValid;
+    };
+
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+
+        if (validate()) {
+            const body = {
+                name: formData.name,
+                username: formData.username,
+                password: formData.password
+            };
+
+            try {
+                const response = await axios.post(
+                    `${serverEndpoint}/auth/register`,
+                    body,
+                    { withCredentials: true }
+                );
+
+                dispatch({
+                    type: SET_USER,
+                    payload: response.data.user
+                });
+
+                if (updateUserDetails) {
+                    updateUserDetails({ name: formData.name, email: formData.username });
+                }
+
+                setMessage("Registration successful!");
+                setErrors({});
+                setFormData({ name: '', username: '', password: '' });
+
+            } catch (error) {
+                console.error(error);
+                setMessage(null);
+                if (error?.response?.status === 401) {
+                    setErrors({ message: 'User exists with the given email' });
+                } else {
+                    setErrors({ message: 'Something went wrong, please try again' });
+                }
+            }
+        }
+    };
+
+    const handleGoogleSignin = async (authResponse) => {
+        try {
+            const response = await axios.post(
+                `${serverEndpoint}/auth/google-auth`,
+                { idToken: authResponse.credential },
+                { withCredentials: true }
+            );
+
+            dispatch({
+                type: SET_USER,
+                payload: response.data.userDetails || response.data.user
+            });
+
+            setMessage("Google sign-in successful!");
+        } catch (error) {
+            console.error(error);
+            setErrors({ message: 'Something went wrong while Google sign-in' });
+        }
+    };
+
+    const handleGoogleSigninFailure = (error) => {
+        console.error(error);
+        setErrors({ message: 'Something went wrong while Google sign-in' });
+    };
+
+    return (
+        <div className="container py-5">
+            <div className="row justify-content-center">
+                <div className="col-md-4">
+                    <h2 className="text-center mb-4">Sign up with a new account</h2>
+
+                    {message && (
+                        <div className="alert alert-success" role="alert">
+                            {message}
+                        </div>
+                    )}
+
+                    {errors.message && (
+                        <div className="alert alert-danger" role="alert">
+                            {errors.message}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit}>
+                        <div className="mb-3">
+                            <label htmlFor="name" className="form-label">Name</label>
+                            <input
+                                type="text"
+                                className={`form-control ${errors.name ? 'is-invalid' : ''}`}
+                                id="name"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                            />
+                            {errors.name && (
+                                <div className="invalid-feedback">
+                                    {errors.name}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mb-3">
+                            <label htmlFor="username" className="form-label">Email</label>
+                            <input
+                                type="email"
+                                className={`form-control ${errors.username ? 'is-invalid' : ''}`}
+                                id="username"
+                                name="username"
+                                value={formData.username}
+                                onChange={handleChange}
+                            />
+                            {errors.username && (
+                                <div className="invalid-feedback">
+                                    {errors.username}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mb-3">
+                            <label htmlFor="password" className="form-label">Password</label>
+                            <input
+                                type="password"
+                                className={`form-control ${errors.password ? 'is-invalid' : ''}`}
+                                id="password"
+                                name="password"
+                                value={formData.password}
+                                onChange={handleChange}
+                            />
+                            {errors.password && (
+                                <div className="invalid-feedback">
+                                    {errors.password}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="d-grid">
+                            <button type="submit" className="btn btn-primary">Submit</button>
+                        </div>
+                    </form>
+
+                    <div className="text-center">
+                        <div className="my-4 d-flex align-items-center text-muted">
+                            <hr className="flex-grow-1" />
+                            <span className="px-2">OR</span>
+                            <hr className="flex-grow-1" />
+                        </div>
+
+                        <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+                            <GoogleLogin
+                                onSuccess={handleGoogleSignin}
+                                onError={handleGoogleSigninFailure}
+                            />
+                        </GoogleOAuthProvider>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default Register;
