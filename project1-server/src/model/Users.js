@@ -8,7 +8,7 @@ const UsersSchema = new mongoose.Schema({
     googleId: { type: String, required: false },
     role: { type: String, default: 'admin' },
     adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'Users', index: true },
-    credits:{type: Number}
+    credits: { type: Number, default: 0 }
 });
 
 module.exports = mongoose.model('users', UsersSchema);

@@ -1,21 +1,20 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const express = require('express');
+const express = require('express'); // Include the express module
 const cookieParser = require('cookie-parser');
-const cors = require('cors');
-
 const authRoutes = require('./src/routes/authRoutes');
 const linksRoutes = require('./src/routes/linksRoutes');
 const userRoutes = require('./src/routes/userRoutes');
-const paymentRoutes = require('./src/routes/paymentRoutes');  // Add payment routes
+const paymentRoutes = require('./src/routes/paymentRoutes');
+const cors = require('cors');
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('MongoDB Connected'))
     .catch((error) => console.log(error));
 
-const app = express();
+const app = express(); // Instantiate express app.
 
-app.use(express.json());
+app.use(express.json()); // Middleware to convert json to javascript object.
 app.use(cookieParser());
 
 const corsOptions = {
@@ -23,14 +22,13 @@ const corsOptions = {
     credentials: true
 };
 app.use(cors(corsOptions));
-
 app.use('/auth', authRoutes);
 app.use('/links', linksRoutes);
 app.use('/users', userRoutes);
-app.use('/payments', paymentRoutes);  // Mount payment routes
+app.use('/payments', paymentRoutes);
 
 const PORT = 5001;
-app.listen(PORT, (error) => {
+app.listen(5001, (error) => {
     if (error) {
         console.log('Error starting the server: ', error);
     } else {

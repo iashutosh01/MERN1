@@ -4,7 +4,7 @@ const Users = require('../model/Users');
 const { OAuth2Client } = require('google-auth-library');
 const { validationResult } = require('express-validator');
 
-// JWT secret key from environment
+// https://www.uuidgenerator.net/
 const secret = process.env.JWT_SECRET;
 
 const authController = {
@@ -15,36 +15,38 @@ const authController = {
                 return response.status(401).json({ errors: errors.array() });
             }
 
+            // The body contains username and password because of the express.json()
+            // middleware configured in the server.js
             const { username, password } = request.body;
 
-            const user = await Users.findOne({ email: username });
-            if (!user) {
-                return response.status(401).json({ message: 'Invalid credentials' });
+            // Call Database to fetch user by the email
+            const data = await Users.findOne({ email: username });
+            if (!data) {
+                return response.status(401).json({ message: 'Invalid credentials ' });
             }
 
-            const isMatch = await bcrypt.compare(password, user.password);
+            const isMatch = await bcrypt.compare(password, data.password);
             if (!isMatch) {
-                return response.status(401).json({ message: 'Invalid credentials' });
+                return response.status(401).json({ message: 'Invalid credentials ' });
             }
 
-            const userPayload = {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role || 'admin',
-                adminId: user.adminId
+            const user = {
+                id: data._id,
+                name: data.name,
+                email: data.email,
+                role: data.role ? data.role : 'admin',
+                adminId: data.adminId,
+                credits: data.credits
             };
 
-            const token = jwt.sign(userPayload, secret, { expiresIn: '1h' });
-
+            const token = jwt.sign(user, secret, { expiresIn: '1h' });
             response.cookie('jwtToken', token, {
                 httpOnly: true,
-                secure: false, // localhost works on HTTP, not HTTPS
-                sameSite: 'lax', // safer default for CSRF
+                secure: true,
+                domain: 'localhost',
                 path: '/'
             });
-
-            response.json({ user: userPayload, message: 'User authenticated' });
+            response.json({ user: user, message: 'User authenticated' });
         } catch (error) {
             console.log(error);
             response.status(500).json({ error: 'Internal server error' });
@@ -52,66 +54,69 @@ const authController = {
     },
 
     logout: (request, response) => {
-        response.clearCookie('jwtToken', { path: '/' });
-        response.json({ message: 'Logout successful' });
+        response.clearCookie('jwtToken');
+        response.json({ message: 'Logout successfull' });
     },
 
-    isUserLoggedIn: (request, response) => {
+    isUserLoggedIn: async (request, response) => {
         const token = request.cookies.jwtToken;
 
         if (!token) {
             return response.status(401).json({ message: 'Unauthorized access' });
         }
 
-        jwt.verify(token, secret, (error, user) => {
+        jwt.verify(token, secret, async (error, user) => {
             if (error) {
                 return response.status(401).json({ message: 'Unauthorized access' });
             } else {
-                response.json({ message: 'User is logged in', user: user });
+                const latestUserDetails = await Users.findById({ _id: user.id });
+                response.json({ message: 'User is logged in', user: latestUserDetails });
             }
         });
     },
 
     register: async (request, response) => {
         try {
-            const { username, password, name, role } = request.body;
+            // Extract attributes from the request body
+            const { username, password, name } = request.body;
 
-            const existingUser = await Users.findOne({ email: username });
-            if (existingUser) {
-                return response.status(401).json({ message: 'Account already exists with given email' });
+            // Firstly check if user already exist with the given email
+            const data = await Users.findOne({ email: username });
+            if (data) {
+                return response.status(401)
+                    .json({ message: 'Account already exist with given email' });
             }
 
+            // Encrypt the password before saving the record to the database
             const encryptedPassword = await bcrypt.hash(password, 10);
 
+            // Create mongoose model object and set the record values
             const user = new Users({
                 email: username,
                 password: encryptedPassword,
                 name: name,
-                role: role || 'admin'
+                role: 'admin'
             });
-
             await user.save();
-
             const userDetails = {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                credits: user.credits
             };
-
             const token = jwt.sign(userDetails, secret, { expiresIn: '1h' });
 
             response.cookie('jwtToken', token, {
                 httpOnly: true,
-                secure: false, // For localhost HTTP
-                sameSite: 'lax',
+                secure: true,
+                domain: 'localhost',
                 path: '/'
             });
-
             response.json({ message: 'User registered', user: userDetails });
         } catch (error) {
             console.log(error);
-            response.status(500).json({ error: 'Internal server error' });
+            return response.status(500).json({ error: 'Internal Server Error' });
         }
     },
 
@@ -131,40 +136,39 @@ const authController = {
             const payload = googleResponse.getPayload();
             const { sub: googleId, name, email } = payload;
 
-            let user = await Users.findOne({ email: email });
-            if (!user) {
-                user = new Users({
+            let data = await Users.findOne({ email: email });
+            if (!data) {
+                data = new Users({
                     email: email,
                     name: name,
                     isGoogleUser: true,
                     googleId: googleId,
                     role: 'admin'
                 });
-                await user.save();
+                await data.save();
             }
 
-            const userPayload = {
-                id: user._id || googleId,
+            const user = {
+                id: data._id ? data._id : googleId,
                 username: email,
                 name: name,
-                role: user.role || 'admin'
+                role: data.role ? data.role : 'admin', // This is the ensure backward compatibility
+                credits: data.credits
             };
 
-            const token = jwt.sign(userPayload, secret, { expiresIn: '1h' });
-
+            const token = jwt.sign(user, secret, { expiresIn: '1h' });
             response.cookie('jwtToken', token, {
                 httpOnly: true,
-                secure: false, // localhost
-                sameSite: 'lax',
+                secure: true,
+                domain: 'localhost',
                 path: '/'
             });
-
-            response.json({ user: userPayload, message: 'User authenticated' });
+            response.json({ user: user, message: 'User authenticated' });
         } catch (error) {
             console.log(error);
-            response.status(500).json({ message: 'Internal server error' });
+            return response.status(500).json({ message: 'Internal server error' });
         }
-    }
+    },
 };
 
 module.exports = authController;

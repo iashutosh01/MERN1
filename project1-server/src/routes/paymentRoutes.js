@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const authMiddleware = require('../middleware/authMiddleware');
+const authorize = require('../middleware/authorizeMiddleware');
 const paymentController = require('../controller/paymentController');
-const { isAuthenticated } = require('../middleware/auth');  // if you have auth middleware
 
-// Routes
-router.post('/create-order', isAuthenticated, paymentController.createOrder);
-router.post('/verify-order', isAuthenticated, paymentController.verifyOrder);
+router.use(authMiddleware.protect);
+
+router.post('/create-order', authorize('payment:create'), paymentController.createOrder);
+router.post('/verify-order', authorize('payment:create'), paymentController.verifyOrder);
 
 module.exports = router;
