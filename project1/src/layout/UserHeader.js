@@ -39,10 +39,10 @@ function UserHeader() {
                             </Link>
                             <ul className="dropdown-menu dropdown-menu-end">
                                 <li>
-                                        <Link className="dropdown-item" to="/manage-payments">
-                                            Manage payments
-                                        </Link>
-                                    </li>
+                                    <Link className="dropdown-item" to="/manage-payments">
+                                    Manage Payments
+                                    </Link>
+                                </li>
                                 <Can permission='canViewUser'>
                                     <li>
                                         <Link className="dropdown-item" to="/users">
