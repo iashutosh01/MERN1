@@ -1,5 +1,7 @@
+shareIt is a modern MERN stack web app for affiliate marketing and link management. It features secure user authentication, real-time analytics, payment integration, and a clean, responsive UI. Easily manage affiliate links, track performance, and collaborate with your team—all in one place.
 
-```
+
+
 MERN1
 ├─ project1
 │  ├─ .env.development
