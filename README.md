@@ -1,79 +1,32 @@
-shareIt is a modern MERN stack web app for affiliate marketing and link management. It features secure user authentication, real-time analytics, payment integration, and a clean, responsive UI. Easily manage affiliate links, track performance, and collaborate with your team—all in one place.
+shareIt – Modern MERN Affiliate & Link Management Platform
+shareIt is a full-stack web application built with the MERN stack (MongoDB, Express, React, Node.js) designed for modern affiliate marketing, link management, and team collaboration. It features a clean, responsive UI and robust backend, making it ideal for marketers, businesses, and influencers.
 
+✨ Features
+User Authentication & RBAC: Secure registration, login, password reset, and role-based access control for admins, users, and teams.
+Dashboard: Personalized dashboard with real-time analytics and campaign performance tracking.
+Link Management: Create, manage, and analyze affiliate links with detailed click tracking and statistics.
+Payment Integration: Purchase credits, manage subscriptions, and view payment history with secure payment gateway integration.
+Team Collaboration: Role-based permissions for managing users and teams.
+Modern UI: Responsive, mobile-friendly design with a unique, attractive color palette and branding.
+Notifications: Email notifications for account actions and password resets.
+Security: JWT-based authentication, secure password handling, and protected routes.
 
+🛠️ Tech Stack
+Frontend: React, Redux, Bootstrap, custom CSS
+Backend: Node.js, Express
+Database: MongoDB (Mongoose)
+Authentication: JWT, bcrypt
+Payments: (e.g., Razorpay integration)
+Other: React Router, role-based access control, email service
 
-MERN1
-├─ project1
-│  ├─ .env.development
-│  ├─ .env.production
-│  ├─ package-lock.json
-│  ├─ package.json
-│  ├─ public
-│  │  └─ index.html
-│  ├─ README.md
-│  └─ src
-│     ├─ App.js
-│     ├─ components
-│     │  └─ UnauthorizedAccess.js
-│     ├─ config
-│     │  └─ config.js
-│     ├─ index.js
-│     ├─ layout
-│     │  ├─ AppLayout.js
-│     │  ├─ Footer.js
-│     │  ├─ Header.js
-│     │  ├─ UserFooter.js
-│     │  ├─ UserHeader.js
-│     │  └─ UserLayout.js
-│     ├─ pages
-│     │  ├─ Dashboard.js
-│     │  ├─ Error.js
-│     │  ├─ Home.js
-│     │  ├─ links
-│     │  │  └─ LinksDashboard.js
-│     │  ├─ Login.js
-│     │  ├─ Logout.js
-│     │  ├─ Register.js
-│     │  └─ users
-│     │     └─ ManageUsers.js
-│     ├─ rbac
-│     │  ├─ Can.js
-│     │  ├─ ProtectedRoute.js
-│     │  └─ userPermissions.js
-│     └─ redux
-│        ├─ store.js
-│        └─ user
-│           ├─ actions.js
-│           └─ reducer.js
-└─ project1-server
-   ├─ .env
-   ├─ package-lock.json
-   ├─ package.json
-   ├─ scripts
-   │  └─ addUser.js
-   ├─ server.js
-   └─ src
-      ├─ constants
-      │  ├─ paymentConstants.js
-      │  ├─ permissions.js
-      │  └─ userConstants.js
-      ├─ controller
-      │  ├─ authController.js
-      │  ├─ linksController.js
-      │  ├─ paymentController.js
-      │  └─ userController.js
-      ├─ dao
-      ├─ middleware
-      │  ├─ authMiddleware.js
-      │  └─ authorizeMiddleware.js
-      ├─ model
-      │  ├─ Links.js
-      │  └─ Users.js
-      ├─ routes
-      │  ├─ authRoutes.js
-      │  ├─ linksRoutes.js
-      │  └─ userRoutes.js
-      └─ service
-         └─ emailService.js
+🚀 How to Use
+Clone the repository
+Install dependencies for both frontend and backend
+Configure environment variables (API keys, DB URI, etc.)
+Run backend and frontend servers
+Register a new user or login as admin
+Start managing links, users, and payments!
 
-```
+📦 Folder Structure
+project1/ – Frontend (React)
+project1-server/ – Backend (Node.js/Express)
