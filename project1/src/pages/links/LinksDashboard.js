@@ -2,21 +2,33 @@ import IconButton from '@mui/material/IconButton';
 import { DataGrid } from '@mui/x-data-grid';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { serverEndpoint } from '../../config/config';
 import { Modal } from 'react-bootstrap';
 import { usePermission } from '../../rbac/userPermissions';
+import { useNavigate } from 'react-router-dom';
 
 function LinksDashboard() {
     const [errors, setErrors] = useState({});
     const [linksData, setLinksData] = useState([]);
+    const navigate = useNavigate();
 
     const [showModal, setShowModal] = useState(false);
     const [isEdit, setIsEdit] = useState(false);
 
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const permission = usePermission();
+
+    const [ loading , setLoading] = useState(false);
+    const [currentPage,setCurrentPage]=useState(0);
+    const [pageSize,setPageSize]=useState(5);
+    const [searchQuery,setSearchQuery]=useState('');
+    const [totalRecords,setTotalRecords]=useState(0);
+    const [sortModel, setSortModel]=useState([
+        { field:"createdAt",sort:'desc'}
+    ]);
 
     const handleShowDeleteModal = (linkId) => {
         setFormData({
@@ -136,19 +148,37 @@ function LinksDashboard() {
 
     const fetchLinks = async () => {
         try {
+            setLoading(true);
+
+            const sortField = sortModel[0]?.field || 'createdAt';
+            const sortOrder = sortModel[0]?.sort || 'desc';
+
+            const params = {
+                currentPage: currentPage,
+                pageSize: pageSize,
+                searchQuery: searchQuery,
+                sortField: sortField,
+                sortOrder:sortOrder
+            };
+
             const response = await axios.get(`${serverEndpoint}/links`, {
+                params: params,
                 withCredentials: true
             });
-            setLinksData(response.data.data);
+            setLinksData(response.data.links);
+            setTotalRecords(response.data.total);
         } catch (error) {
             console.log(error);
             setErrors({ message: 'Unable to fetch links at the moment. Please try again' });
+        } finally{
+            setLoading(false);
         }
     };
-
+    //nything mentioned in the dependency array of useEffect will trigger
+    //useEffect execution if there is any change in any value.
     useEffect(() => {
         fetchLinks();
-    }, []);
+    }, [currentPage, pageSize, searchQuery, sortModel]);
 
     const columns = [
         { field: 'campaignTitle', headerName: 'Campaign', flex: 2 },
@@ -167,7 +197,7 @@ function LinksDashboard() {
         { field: 'category', headerName: 'Category', flex: 2 },
         { field: 'clickCount', headerName: 'Clicks', flex: 1 },
         {
-            field: 'action', headerName: 'Clicks', flex: 1, renderCell: (params) => (
+            field: 'action', headerName: 'Clicks', flex: 1, sortable:false, renderCell: (params) => (
                 <>
                     {permission.canEditLink && (
                         <IconButton>
@@ -180,9 +210,35 @@ function LinksDashboard() {
                             <DeleteIcon onClick={() => handleShowDeleteModal(params.row._id)} />
                         </IconButton>
                     )}
+                    {permission.canViewLink && (
+                        <IconButton>
+                            <AssessmentIcon onClick={()=>{
+                            navigate(`/analytics/${params.row._id}`);
+                            }} />
+                        </IconButton>
+                    )}
                 </>
             )
         },
+        {
+            field: 'share',
+            headerName: 'Share Affiliate Link',
+            sortable: false,
+            flex: 1.5,
+            renderCell: (params) => {
+                const shareURL = `${serverEndpoint}/links/r/${params.row._id}`;
+                return(
+                    <button className='btn btn-outline-primary btn-sm'
+                        onClick={(e) => {
+                            //Programmatic way of performing ctrl+c action
+                            navigator.clipboard.writeText(shareURL);
+                        }}
+                    >
+                        Copy
+                    </button>
+                )
+            }
+        }
     ];
 
     return (
@@ -202,6 +258,17 @@ function LinksDashboard() {
                 </div>
             )}
 
+            <div className='mb-2'>
+                <input
+                type='text' className='form-control'
+                placeholder='Enter Campaign title, original URL, or Category to search'
+                onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(0);//Reset to 0 on fresh search
+                }}
+                />
+            </div>
+
             <div style={{ height: 500, width: '100%' }}>
                 <DataGrid
                     getRowId={(row) => row._id}
@@ -209,10 +276,26 @@ function LinksDashboard() {
                     columns={columns}
                     initialState={{
                         pagination: {
-                            paginationModel: { pageSize: 20, page: 0 }
+                            paginationModel: { pageSize: pageSize, page: currentPage }
                         }
                     }}
-                    pageSizeOptions={[20, 50, 100]}
+                    pageSizeOptions={[2,3,4]}
+                    paginationMode='server'
+                    onPaginationModelChange={(newPage) => {
+                        setCurrentPage(newPage.page);
+                        setPageSize(newPage.pageSize);
+                    }}
+                    onPageSizeChange={(newPageSize)=> {
+                        setPageSize(newPageSize);
+                        setCurrentPage(0);
+                    }}
+                    rowCount={totalRecords}
+                    sortingMode='server'
+                    onSortModelChange={(newModel) =>
+                    {
+                        setSortModel(newModel);
+                        setCurrentPage(0);
+                    }}
                     disableRowSelectionOnClick
                     showToolbar
                     sx={{

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-const clicksSchema = new mongoose.Schema({
-    linkId: {type: mongoose.Schema.Types.ObjectId, ref: 'Links', required: true},
+const clickSchema = new mongoose.Schema({
+    linkId: { type: mongoose.Schema.Types.ObjectId, ref: 'Links', required: true},
     ip: String,
     city: String,
     country: String,
@@ -13,10 +13,7 @@ const clicksSchema = new mongoose.Schema({
     userAgent: String,
     deviceType: String,
     browser: String,
-    clickedAt: {type: Date, Default: Date.now},
+    clickedAt: { type: Date, default: Date.now},
 });
 
-module.exports = mongoose.model('Clicks', clicksSchema);
-
-
-
+module.exports = mongoose.model('Clicks', clickSchema);

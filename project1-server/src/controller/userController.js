@@ -34,7 +34,7 @@ const userController = {
             });
 
             try {
-                await send(email, 'Affiliate++ Temporary Password',
+                await send(email, 'shareit Temporary Password',
                     `Your temporary password is ${temporaryPassword}`);
                     console.log(temporaryPassword);
             } catch (error) {

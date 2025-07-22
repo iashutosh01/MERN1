@@ -1,14 +1,16 @@
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const Users = require('../model/Users');
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const Users = require("../model/Users");
 const { OAuth2Client } = require('google-auth-library');
-const { validationResult } = require('express-validator');
+const { validationResult } = require("express-validator");
+const { attemptToRefreshToken } = require("../util/authUtil");
+const sendMail = require("../service/emailService");
 
-// https://www.uuidgenerator.net/
 const secret = process.env.JWT_SECRET;
+const refreshSecret = process.env.JWT_REFRESH_TOKEN_SECRET;
 
 const authController = {
-    login: async (request, response) => {
+  login: async (request, response) => {
         try {
             const errors = validationResult(request);
             if (!errors.isEmpty()) {
@@ -43,9 +45,19 @@ const authController = {
             const token = jwt.sign(user, secret, { expiresIn: '1h' });
             response.cookie('jwtToken', token, {
                 httpOnly: true,
-                secure: true,
-                domain: 'localhost',
-                path: '/'
+                secure: process.env.NODE_ENV === 'production',
+                path: '/',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
+            });
+
+            const refreshToken = jwt.sign(user, refreshSecret, { expiresIn: '7d' });
+            // Store it in the database if you want! Storing in DB will
+            // make refresh tokens more secure.
+            response.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                path: '/',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
             });
             response.json({ user: user, message: 'User authenticated' });
         } catch (error) {
@@ -55,7 +67,18 @@ const authController = {
     },
 
     logout: (request, response) => {
-        response.clearCookie('jwtToken');
+        response.clearCookie('jwtToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            path: '/',
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
+        });
+        response.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            path: '/',
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
+        });
         response.json({ message: 'Logout successfull' });
     },
 
@@ -68,6 +91,20 @@ const authController = {
 
         jwt.verify(token, secret, async (error, user) => {
             if (error) {
+                const refreshToken = request.cookies?.refreshToken;
+                if (refreshToken) {
+                    const { newAccessToken, user } =
+                        await attemptToRefreshToken(refreshToken);
+                    response.cookie('jwtToken', newAccessToken, {
+                        httpOnly: true,
+                        secure: process.env.NODE_ENV === 'production',
+                        path: '/',
+                        sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
+                    });
+
+                    console.log('Refresh token renewed the access token');
+                    return response.json({ message: 'User is logged in', user: user });
+                }
                 return response.status(401).json({ message: 'Unauthorized access' });
             } else {
                 const latestUserDetails = await Users.findById({ _id: user.id });
@@ -110,9 +147,9 @@ const authController = {
 
             response.cookie('jwtToken', token, {
                 httpOnly: true,
-                secure: true,
-                domain: 'localhost',
-                path: '/'
+                secure: process.env.NODE_ENV === 'production',
+                path: '/',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
             });
             response.json({ message: 'User registered', user: userDetails });
         } catch (error) {
@@ -157,12 +194,23 @@ const authController = {
                 credits: data.credits
             };
 
+            // Making 1 minute only for testing, revert it back to 1h
             const token = jwt.sign(user, secret, { expiresIn: '1h' });
             response.cookie('jwtToken', token, {
                 httpOnly: true,
-                secure: true,
-                domain: 'localhost',
-                path: '/'
+                secure: process.env.NODE_ENV === 'production',
+                path: '/',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
+            });
+
+            const refreshToken = jwt.sign(user, refreshSecret, { expiresIn: '7d' });
+            // Store it in the database if you want! Storing in DB will
+            // make refresh tokens more secure.
+            response.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                path: '/',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
             });
             response.json({ user: user, message: 'User authenticated' });
         } catch (error) {
@@ -170,6 +218,63 @@ const authController = {
             return response.status(500).json({ message: 'Internal server error' });
         }
     },
+
+  sendResetPasswordToken: async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ message: "Email is required" });
+
+      const user = await Users.findOne({ email });
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      user.resetCode = code;
+      user.resetCodeExpires = expiry;
+      await user.save();
+
+      await sendMail(
+        email,
+        "Reset Password Code",
+        `Your 6-digit reset code is: ${code}`
+      );
+      return res.status(200).json({ message: "Reset code sent to email" });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  },
+
+  resetPassword: async (req, res) => {
+    try {
+      const { email, code, newPassword } = req.body;
+      if (!email || !code || !newPassword) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+
+      const user = await Users.findOne({ email });
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      if (user.resetCode !== code) {
+        return res.status(400).json({ message: "Invalid reset code" });
+      }
+
+      if (new Date() > user.resetCodeExpires) {
+        return res.status(400).json({ message: "Reset code has expired" });
+      }
+
+      user.password = await bcrypt.hash(newPassword, 10);
+      user.resetCode = undefined;
+      user.resetCodeExpires = undefined;
+      await user.save();
+
+      return res.status(200).json({ message: "Password reset successful" });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  },
 };
 
 module.exports = authController;

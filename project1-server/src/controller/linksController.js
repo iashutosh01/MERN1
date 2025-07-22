@@ -1,21 +1,18 @@
 const Links = require("../model/Links");
 const Users = require("../model/Users");
-const axios = require('axios');
-const { getDevicInfo } = require("../util/linkUtil");
+const axios = require("axios");
+const { getDeviceInfo } = require("../util/linkUtil");
+const Clicks = require("../model/Clicks");
 
 const linksController = {
   create: async (request, response) => {
     const { campaign_title, original_url, category } = request.body;
 
     try {
-      // We're fetching user details from DB even though we have
-      // it available in request object. The reason is critical operation.
-      // We're dealing with money and we want to pull latest information
-      // whenever we're transacting.
       const user = await Users.findById({ _id: request.user.id });
 
-      const hasActivateSubscription = user.subscription &&
-          user.subscription.status === 'active';
+      const hasActivateSubscription =
+        user.subscription && user.subscription.status === "active";
 
       if (!hasActivateSubscription && user.credits < 1) {
         return response.status(400).json({
@@ -27,38 +24,60 @@ const linksController = {
         campaignTitle: campaign_title,
         originalUrl: original_url,
         category: category,
-        user: request.user.role === "admin" ? 
-              request.user.id : request.user.adminId,
+        user:
+          request.user.role === "admin"
+            ? request.user.id
+            : request.user.adminId,
       });
       await link.save();
 
-      if(!hasActivateSubscription){
+      if (!hasActivateSubscription) {
         user.credits -= 1;
         await user.save();
       }
-      
-      response.json({
-        data: { linkId: link._id },
-      });
+
+      response.json({ data: { linkId: link._id } });
     } catch (error) {
       console.log(error);
-      response.status(500).json({
-        error: "Internal server error",
-      });
+      response.status(500).json({ error: "Internal server error" });
     }
   },
 
   getAll: async (request, response) => {
     try {
+      const {
+        currentPage = 0, pageSize = 10, // Pagination
+        searchQuery = '', //Search
+        sortField = 'createdAt', sortOrder = 'desc' // Sorting
+      } = request.query;
+
       const userId =
         request.user.role === "admin" ? request.user.id : request.user.adminId;
-      const links = await Links.find({ user: userId }).sort({ createdAt: -1 });
-      response.json({ data: links });
+
+      const skip = parseInt(currentPage) * parseInt(pageSize);
+      const limit = parseInt(pageSize);
+      const sort = { [sortField]: sortOrder === 'desc' ? -1 : 1};
+
+      const query = {
+             user: userId 
+      };
+
+      if(searchQuery){
+        query.$or = [
+          { campaignTitle: new RegExp(searchQuery, 'i') },
+          { originalUrl: new RegExp(searchQuery, 'i') },
+          { category: new RegExp(searchQuery, 'i') },
+        ];
+      }
+
+      const links = await Links.find(query)
+          .sort(sort).skip(skip).limit(limit);
+
+      const total = await Links.countDocuments(query);
+      response.json({ links, total });
     } catch (error) {
       console.log(error);
-      response.status(500).json({
-        error: "Internal server error",
-      });
+      response.status(500).json({ error: "Internal server error" });
     }
   },
 
@@ -76,19 +95,14 @@ const linksController = {
 
       const userId =
         request.user.role === "admin" ? request.user.id : request.user.adminId;
-      // Make sure the link indeed belong to the logged in user.
       if (link.user.toString() !== userId) {
-        return response.status(403).json({
-          error: "Unauthorized access",
-        });
+        return response.status(403).json({ error: "Unauthorized access" });
       }
 
       response.json({ data: link });
     } catch (error) {
       console.log(error);
-      response.status(500).json({
-        error: "Internal server error",
-      });
+      response.status(500).json({ error: "Internal server error" });
     }
   },
 
@@ -106,11 +120,8 @@ const linksController = {
 
       const userId =
         request.user.role === "admin" ? request.user.id : request.user.adminId;
-      // Make sure the link indeed belong to the logged in user.
       if (link.user.toString() !== userId) {
-        return response.status(403).json({
-          error: "Unauthorized access",
-        });
+        return response.status(403).json({ error: "Unauthorized access" });
       }
 
       const { campaign_title, original_url, category } = request.body;
@@ -122,15 +133,12 @@ const linksController = {
           category: category,
         },
         { new: true }
-      ); // new: true flag makes sure mongodb returns updated data after the update operation
+      );
 
-      // Return updated link data
       response.json({ data: link });
     } catch (error) {
       console.log(error);
-      response.status(500).json({
-        error: "Internal server error",
-      });
+      response.status(500).json({ error: "Internal server error" });
     }
   },
 
@@ -148,20 +156,15 @@ const linksController = {
 
       const userId =
         request.user.role === "admin" ? request.user.id : request.user.adminId;
-      // Make sure the link indeed belong to the logged in user.
       if (link.user.toString() !== userId) {
-        return response.status(403).json({
-          error: "Unauthorized access",
-        });
+        return response.status(403).json({ error: "Unauthorized access" });
       }
 
       await link.deleteOne();
       response.json({ message: "Link deleted" });
     } catch (error) {
       console.log(error);
-      response.status(500).json({
-        error: "Internal server error",
-      });
+      response.status(500).json({ error: "Internal server error" });
     }
   },
 
@@ -176,34 +179,37 @@ const linksController = {
       if (!link) {
         return response.status(404).json({ error: "LinkID does not exist" });
       }
-      const isDevelopmet = process.env.NODE_ENV === 'development';
+
+      const isDevelopment = process.env.NODE_ENV === "development";
       const ipAddress = isDevelopment
-      ? '8.8.8.8'
-      : request.headers['x-forwarded-for']?.split(',')[0]
-      || request.socket.remoteAddress;
-      const geoResponse = await axios.get(`https://ip-api.com/json${ipAddress}`);
-      const {city, country, region, lat, lon,isp} = geoResponse.data;
+        ? "8.8.8.8"
+        : request.headers["x-forwarded-for"]?.split(",")[0] ||
+          request.socket.remoteAddress;
 
-      const userAgent = request.headers['user-agent'] || 'unknown';
-      const {isMobile, browser} = getDevicInfo(userAgent);
-      const deviceType = isMobile ? 'Mobile' : 'Desktop';
+      const geoResponse = await axios.get(
+        `http://ip-api.com/json/${ipAddress}`
+      );
+      const { city, country, region, lat, lon, isp } = geoResponse.data;
 
-      const referrer = request.get('Referrer') || null;
+      const userAgent = request.headers["user-agent"] || "unknown";
+      const { isMobile, browser } = getDeviceInfo(userAgent);
+      const deviceType = isMobile ? "Mobile" : "Desktop";
+      const referrer = request.get("Referrer") || null;
 
       await Clicks.create({
         linkId: link._id,
         ip: ipAddress,
-        city: city,
-        country: country,
-        region : region,
+        city:city,
+        country:country,
+        region:region,
         latitude: lat,
         longitude: lon,
-        isp: isp,
-        referrer: referrer,
-        userAgent: userAgent,
-        deviceType: deviceType,
-        browser: browser,
-        clickedAt: new Date()
+        isp:isp,
+        referrer:referrer,
+        userAgent:userAgent,
+        deviceType:deviceType,
+        browser:browser,
+        clickedAt: new Date(),
       });
 
       link.clickCount += 1;
@@ -212,47 +218,35 @@ const linksController = {
       response.redirect(link.originalUrl);
     } catch (error) {
       console.log(error);
-      response.status(500).json({
-        error: "Internal server error",
-      });
+      response.status(500).json({ error: "Internal server error" });
     }
   },
-  analytics: async(request, response) => {
-    try{
-      const { linkId, from , to} = request.query;
-      const Link= await Links.findById({_id: linkId});
-      if(!Link){
-        return response.status(404).json({
-          error: 'Link Not Found'
-        });
+
+  analytics: async (request, response) => {
+    try {
+      const { linkId, from, to } = request.query;
+      const link = await Links.findById(linkId);
+      if (!link) {
+        return response.status(400).json({ error: "Link not found" });
       }
 
-      const userId = request.user.role === 'admin'
-      ? request.user.id
-      : request.user.adminId
-      if(link.user.toString()!== userId){
-        return response.status(403).json({
-          error: 'unauthorized'
-        });
+      const userID =
+        request.user.role === "admin" ? request.user.id : request.user.adminId;
+
+      if (link.user.toString() !== userID) {
+        return response.status(403).json({ error: "Unauthorized" });
       }
 
-      const query={
-        linkId: linkId
-      };
-
-      if(from && to){
-        query.clickedAt={$gte: new Date(from), site: new Date(to)};
+      const query = { linkId: linkId };
+      if (from && to) {
+        query.clickedAt = { $gte: new Date(from), $lte: new Date(to) };
       }
 
-      const data = await Clicks.find(query).sort({clickedAt: -1});
+      const data = await Clicks.find(query).sort({ clickedAt: -1 });
       response.json(data);
-
-
-    }catch (error){
+    } catch (error) {
       console.log(error);
-      return response.status(500).json({
-        message: 'Internal Server Error'
-      });
+      return response.status(500).json({ message: "Internal server error" });
     }
   },
 };
